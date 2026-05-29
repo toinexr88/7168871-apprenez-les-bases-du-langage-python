@@ -1,97 +1,97 @@
 # CLAUDE.md — Apprenez les bases du langage Python
 
-This repository contains exercises for the OpenClassrooms course
+Ce dépôt contient les exercices du cours OpenClassrooms
 ["Apprenez les bases du langage Python"](https://openclassrooms.com/fr/courses/7168871-apprenez-les-bases-du-langage-python).
 
-## Repository layout
+## Structure du dépôt
 
 ```
 .
-├── P1/          # Part 1 — Python fundamentals (5 chapters: P1C3–P1C7)
-├── P2/          # Part 2 — Control flow & user interaction (3 chapters: P2C1–P2C3)
-├── P3/          # Part 3 — Advanced topics (3 chapters: P3C1–P3C3)
+├── P1/          # Partie 1 — Fondamentaux Python (5 chapitres : P1C3–P1C7)
+├── P2/          # Partie 2 — Flux de contrôle & interaction utilisateur (3 chapitres : P2C1–P2C3)
+├── P3/          # Partie 3 — Sujets avancés (3 chapitres : P3C1–P3C3)
 └── .claude/
-    ├── hooks/session-start.sh   # auto-installs pytest in remote sessions
-    ├── skills/run/SKILL.md      # /run skill for launching scripts
+    ├── hooks/session-start.sh   # installe pytest automatiquement en session distante
+    ├── skills/run/SKILL.md      # compétence /run pour lancer les scripts
     └── settings.json
 ```
 
-Each chapter has two sub-folders:
+Chaque chapitre contient deux sous-dossiers :
 
 ```
-<Part>/<Chapter>/
-├── énoncé/     # student exercise — main.py is a stub ("Écrivez votre code ici !")
-└── correction/ # reference solution — main.py is the complete working code
+<Partie>/<Chapitre>/
+├── énoncé/     # exercice étudiant — main.py est un squelette ("Écrivez votre code ici !")
+└── correction/ # solution de référence — main.py est le code complet et fonctionnel
 ```
 
-## Chapter overview
+## Aperçu des chapitres
 
-| Chapter | Topic | Notable files |
-|---------|-------|---------------|
-| P1C3 | `print()` and arithmetic | main.py |
-| P1C4 | Variables and f-strings | main.py |
+| Chapitre | Sujet | Fichiers principaux |
+|----------|-------|---------------------|
+| P1C3 | `print()` et arithmétique | main.py |
+| P1C4 | Variables et f-strings | main.py |
 | P1C5 | Types (`str`, `int`, `float`, `bool`) | main.py |
-| P1C6 | Lists (append, remove, sort) | main.py |
-| P1C7 | Dictionaries (add, access, delete) | main.py |
-| P2C1 | Calculator with `input()` + validation | main.py |
-| P2C2 | List stats (sum, average, even count) | main.py |
-| P2C3 | Salary functions | main.py |
-| P3C1 | Module imports | main.py, operations.py |
-| P3C2 | BeautifulSoup HTML scraping | main.py, index.html |
-| P3C3 | CSV ETL pipeline | main.py, input.csv, tests.py |
+| P1C6 | Listes (append, remove, sort) | main.py |
+| P1C7 | Dictionnaires (ajout, accès, suppression) | main.py |
+| P2C1 | Calculatrice avec `input()` + validation | main.py |
+| P2C2 | Statistiques sur une liste (somme, moyenne, pairs) | main.py |
+| P2C3 | Fonctions de calcul de salaire | main.py |
+| P3C1 | Imports de modules | main.py, operations.py |
+| P3C2 | Scraping HTML avec BeautifulSoup | main.py, index.html |
+| P3C3 | Pipeline ETL CSV | main.py, input.csv, tests.py |
 
-## Running exercises
+## Lancer les exercices
 
-**Always `cd` into the script's own directory first** — scripts that read files
-(P3C2 reads `index.html`, P3C3 reads `input.csv`) use relative paths.
+**Toujours faire un `cd` dans le dossier du script avant de le lancer** — les scripts qui lisent des fichiers
+(P3C2 lit `index.html`, P3C3 lit `input.csv`) utilisent des chemins relatifs.
 
 ```bash
-# Non-interactive scripts (P1, P3C1, P3C3)
+# Scripts non interactifs (P1, P3C1, P3C3)
 cd P1/P1C3/correction && python3 main.py
 
-# P3C2 — needs index.html in cwd
+# P3C2 — nécessite index.html dans le répertoire courant
 cd P3/P3C2/correction && python3 main.py
 
-# Interactive scripts (P2 — use input())
+# Scripts interactifs (P2 — utilisent input())
 cd P2/P2C1/correction
 echo -e "4\n2\n+" | python3 main.py
 ```
 
-Use the `/run` skill to launch scripts interactively within Claude Code.
+Utiliser la compétence `/run` pour lancer les scripts de façon interactive dans Claude Code.
 
-## Running tests
+## Lancer les tests
 
-Only P3C3 has automated tests. Run them from inside the `correction/` folder
-so the working directory matches what `main.py` expects:
+Seul P3C3 dispose de tests automatisés. Les lancer depuis le dossier `correction/`
+afin que le répertoire de travail corresponde à ce qu'attend `main.py` :
 
 ```bash
 cd P3/P3C3/correction
 python3 -m pytest --import-mode=importlib ../énoncé/tests.py -v
 ```
 
-`pytest` is auto-installed in remote sessions by the `SessionStart` hook.
+`pytest` est installé automatiquement en session distante par le hook `SessionStart`.
 
-## Code conventions
+## Conventions de code
 
-- **Language**: French — all variable names, comments, and `print` output are in French.
-- **Python version**: Python 3 (always invoked as `python3`).
-- **Style**: Plain procedural code; no classes, no type annotations.
-- **String formatting**: f-strings preferred (`f"Je m'appelle {nom}"`).
-- **Input validation**: Use `.isnumeric()` for integer checks; raise `SystemExit()` on invalid input.
-- **Comments**: Short inline French comments that explain the *why*, not the *what*.
-- **No virtual environment**: No third-party packages except `beautifulsoup4` (P3C2) and `pytest` (auto-installed).
+- **Langue** : Français — tous les noms de variables, commentaires et sorties `print` sont en français.
+- **Version Python** : Python 3 (toujours invoqué avec `python3`).
+- **Style** : Code procédural simple ; pas de classes, pas d'annotations de type.
+- **Formatage des chaînes** : f-strings privilégiées (`f"Je m'appelle {nom}"`).
+- **Validation des entrées** : Utiliser `.isnumeric()` pour vérifier les entiers ; lever `SystemExit()` en cas d'entrée invalide.
+- **Commentaires** : Courtes lignes en français expliquant le *pourquoi*, pas le *quoi*.
+- **Pas d'environnement virtuel** : Aucun paquet tiers sauf `beautifulsoup4` (P3C2) et `pytest` (installé automatiquement).
 
-## P3C3 ETL pattern (the most complex exercise)
+## Modèle ETL de P3C3 (l'exercice le plus complexe)
 
 ```python
 def extract(filename="input.csv") -> list[dict]:
-    # reads CSV with csv.DictReader; returns list of row dicts
+    # lit le CSV avec csv.DictReader ; retourne une liste de dicts
 
 def transform(data) -> list[dict]:
-    # computes salaire = int(heures_travaillees) * 15
+    # calcule salaire = int(heures_travaillees) * 15
 
 def load(data, filename="output.csv"):
-    # writes CSV with csv.DictWriter
+    # écrit le CSV avec csv.DictWriter
 
 def main():
     data = extract("input.csv")
@@ -102,26 +102,26 @@ if __name__ == "__main__":
     main()
 ```
 
-Tests in `énoncé/tests.py` import `main` from the correction, run it, assert
-specific salary values per employee name, then delete `output.csv`.
+Les tests dans `énoncé/tests.py` importent `main` depuis la correction, l'exécutent, vérifient
+les valeurs de salaire par nom d'employé, puis suppriment `output.csv`.
 
-## P3C1 module pattern
+## Modèle de module de P3C1
 
-`operations.py` defines `addition(a, b)` and `multiplication(a, b)`.
-`main.py` imports the module and calls `operations.addition(...)`.
+`operations.py` définit `addition(a, b)` et `multiplication(a, b)`.
+`main.py` importe le module et appelle `operations.addition(...)`.
 
-## Git workflow
+## Flux de travail Git
 
-- **Main branch**: `main` (upstream course content)
-- **Development branch**: `claude/claude-md-docs-j7hS3` (current work branch)
-- Push to the development branch; do not push directly to `main`.
+- **Branche principale** : `main` (contenu du cours en amont)
+- **Branche de développement** : `claude/claude-md-docs-j7hS3` (branche de travail actuelle)
+- Pousser sur la branche de développement ; ne pas pousser directement sur `main`.
 
 ```bash
 git push -u origin claude/claude-md-docs-j7hS3
 ```
 
-## Claude Code hooks
+## Hooks Claude Code
 
-`SessionStart` hook (`.claude/hooks/session-start.sh`) runs at the start of
-every remote session and installs `pytest` if it is not already present.
-It is a no-op in local sessions (`CLAUDE_CODE_REMOTE` must equal `"true"`).
+Le hook `SessionStart` (`.claude/hooks/session-start.sh`) s'exécute au démarrage de chaque
+session distante et installe `pytest` s'il n'est pas déjà présent.
+Il ne fait rien en session locale (`CLAUDE_CODE_REMOTE` doit être égal à `"true"`).
