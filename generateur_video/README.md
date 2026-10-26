@@ -1,6 +1,44 @@
 # 🎬 Générateur de vidéo
 
-Transforme vos photos en vidéo MP4 animée :
+Deux façons de créer une vidéo à partir de vos photos :
+
+1. **✨ Agnes AI** : l'intelligence artificielle d'[Agnes](https://platform.agnes-ai.com)
+   génère une vidéo à partir d'une description et d'**une ou plusieurs photos de référence** ;
+2. **🎞️ Diaporama** : vos photos sont assemblées sur votre ordinateur en diaporama animé.
+
+## ✨ Création par Agnes AI
+
+1. Créez une clé API sur <https://platform.agnes-ai.com/settings/apiKeys>.
+2. Lancez `python app_web.py` et ouvrez <http://localhost:8000> (onglet **Agnes AI**).
+3. **Collez votre clé API** dans le champ prévu (case « Mémoriser » pour ne pas la recoller
+   à chaque fois : elle reste alors dans votre navigateur uniquement).
+4. Ajoutez vos photos de référence et décrivez la vidéo voulue, puis cliquez sur
+   **Créer la vidéo avec Agnes**. La progression s'affiche, puis la vidéo à télécharger.
+
+Selon le nombre de photos, le mode « Automatique » choisit :
+
+| Photos | Mode Agnes   | Résultat                                                  |
+|--------|--------------|-----------------------------------------------------------|
+| 1      | `img2video`  | la photo est animée (elle sert de première image)         |
+| 2      | `keyframe`   | transition de la 1re photo vers la 2e                     |
+| 3 à 5  | `reference`  | les photos guident le style et le contenu de la vidéo     |
+
+Réglages : modèle (`agnes-video-2.5-flash` rapide en 720P, ou `agnes-video-2.5` jusqu'en 2K),
+durée de 4 à 12 secondes, format (16:9, 9:16, 1:1…).
+
+En ligne de commande :
+
+```bash
+python agnes.py --cle VOTRE_CLE --prompt "La caméra avance doucement, lumière dorée" photo.jpg
+python agnes.py --prompt "Transition fluide" debut.jpg fin.jpg -o transition.mp4   # clé dans AGNES_API_KEY
+```
+
+> La génération est facturée par Agnes selon votre forfait. Les photos sont réduites
+> (1536 px maximum) avant l'envoi.
+
+## 🎞️ Diaporama local
+
+Transforme vos photos en vidéo MP4 animée, sans connexion internet :
 
 - écran titre avec sous-titre ;
 - effet **Ken Burns** (zoom lent et léger glissement) sur chaque photo ;
@@ -10,6 +48,8 @@ Transforme vos photos en vidéo MP4 animée :
 - formats paysage 720p / 1080p, carré (Instagram) ou vertical (Stories).
 
 ## Installation
+
+(ffmpeg n'est nécessaire que pour le diaporama local.)
 
 1. Python 3.10 ou plus récent.
 2. [ffmpeg](https://ffmpeg.org/download.html) installé et accessible dans le terminal.
@@ -27,7 +67,7 @@ pip install -r requirements.txt
 python app_web.py
 ```
 
-Ouvrez ensuite <http://localhost:8000>, choisissez vos photos (ou cochez « photos de
+Ouvrez ensuite <http://localhost:8000/diaporama>, choisissez vos photos (ou cochez « photos de
 démonstration ») puis cliquez sur **Générer la vidéo**. La vidéo s'affiche et peut être
 téléchargée.
 
@@ -51,7 +91,8 @@ zoom, images par seconde…).
 
 | Fichier          | Rôle                                                         |
 |------------------|--------------------------------------------------------------|
-| `studio.py`      | Cœur du générateur : calcul des images et encodage via ffmpeg |
+| `agnes.py`       | Connexion à l'API vidéo d'Agnes AI (+ ligne de commande)      |
+| `studio.py`      | Cœur du diaporama : calcul des images et encodage via ffmpeg |
 | `main.py`        | Application en ligne de commande                             |
 | `app_web.py`     | Interface web (bibliothèque standard uniquement)             |
-| `test_studio.py` | Tests automatiques (`python -m pytest`)                      |
+| `test_*.py`      | Tests automatiques (`python -m pytest`)                      |
