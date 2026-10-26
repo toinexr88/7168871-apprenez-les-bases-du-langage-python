@@ -4,7 +4,9 @@ Deux façons de créer une vidéo à partir de vos photos :
 
 1. **✨ Agnes AI** : l'intelligence artificielle d'[Agnes](https://platform.agnes-ai.com)
    génère une vidéo à partir d'une description et d'**une ou plusieurs photos de référence** ;
-2. **🎞️ Diaporama** : vos photos sont assemblées sur votre ordinateur en diaporama animé.
+2. **🎞️ Diaporama** : vos photos sont assemblées sur votre ordinateur en diaporama animé ;
+3. **🎬 Montage** : plusieurs segments (vidéos Agnes, diaporamas, vos propres clips)
+   sont réunis en **une seule et même vidéo**.
 
 ## ✨ Création par Agnes AI
 
@@ -36,6 +38,25 @@ python agnes.py --prompt "Transition fluide" debut.jpg fin.jpg -o transition.mp4
 > La génération est facturée par Agnes selon votre forfait. Les photos sont réduites
 > (1536 px maximum) avant l'envoi.
 
+## 🎬 Montage : plusieurs segments en une seule vidéo
+
+Agnes crée des vidéos courtes (4 à 12 s) : générez plusieurs segments, puis réunissez-les.
+
+1. Après chaque vidéo Agnes (ou diaporama), cliquez sur **➕ Ajouter au montage**.
+2. Dans l'onglet **Montage**, ajoutez si besoin d'autres vidéos déjà créées (➕)
+   ou vos propres clips (fichiers vidéo de votre ordinateur ou téléphone).
+3. Réorganisez avec ↑ ↓, retirez avec ✕, choisissez le format final et la durée
+   du fondu entre segments, puis cliquez sur **Assembler en une seule vidéo**.
+
+Les segments de tailles différentes sont mis au même format (bandes noires si besoin) ;
+ceux qui n'ont pas de son reçoivent un silence.
+
+En ligne de commande :
+
+```bash
+python montage.py scene1.mp4 scene2.mp4 scene3.mp4 -o film.mp4 --fondu 0.5 --format 16:9
+```
+
 ## 🎞️ Diaporama local
 
 Transforme vos photos en vidéo MP4 animée, sans connexion internet :
@@ -49,7 +70,7 @@ Transforme vos photos en vidéo MP4 animée, sans connexion internet :
 
 ## Installation
 
-(ffmpeg n'est nécessaire que pour le diaporama local.)
+(ffmpeg est nécessaire pour le diaporama et le montage.)
 
 1. Python 3.10 ou plus récent.
 2. [ffmpeg](https://ffmpeg.org/download.html) installé et accessible dans le terminal.
@@ -92,6 +113,7 @@ zoom, images par seconde…).
 | Fichier          | Rôle                                                         |
 |------------------|--------------------------------------------------------------|
 | `agnes.py`       | Connexion à l'API vidéo d'Agnes AI (+ ligne de commande)      |
+| `montage.py`     | Assemblage de plusieurs segments en une seule vidéo (ffmpeg)  |
 | `studio.py`      | Cœur du diaporama : calcul des images et encodage via ffmpeg |
 | `main.py`        | Application en ligne de commande                             |
 | `app_web.py`     | Interface web (bibliothèque standard uniquement)             |

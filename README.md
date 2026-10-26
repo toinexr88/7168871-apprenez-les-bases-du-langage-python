@@ -68,4 +68,4 @@ Dans ce dépôt GitHub, vous trouverez l'ensemble des exercices du cours [Appren
 
 ## Projet bonus : générateur de vidéo
 
-Le dossier [`generateur_video`](generateur_video) contient une application qui crée des vidéos à partir de photos : génération par l'IA Agnes AI (clé API à coller dans l'interface, une ou plusieurs photos de référence) ou diaporama animé local, en ligne de commande ou via une interface web. Voir son [README](generateur_video/README.md).
+Le dossier [`generateur_video`](generateur_video) contient une application qui crée des vidéos à partir de photos : génération par l'IA Agnes AI (clé API à coller dans l'interface, une ou plusieurs photos de référence) diaporama animé local, et montage de plusieurs segments en une seule vidéo, en ligne de commande ou via une interface web. Voir son [README](generateur_video/README.md).

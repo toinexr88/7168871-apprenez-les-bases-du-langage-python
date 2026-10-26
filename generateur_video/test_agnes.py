@@ -135,5 +135,8 @@ def test_parcours_web(faux_agnes, tmp_path, monkeypatch):
     assert faux_agnes["requetes"][0]["mode"] == "keyframe"
     assert faux_agnes["requetes"][0]["seconds"] == "6"
     assert app_web.etat_agnes(travail) == {"statut": "en_cours", "progression": 40}
-    assert app_web.etat_agnes(travail) == {"statut": "terminee", "video": f"/video/{travail}.mp4"}
+    assert app_web.etat_agnes(travail) == {
+        "statut": "terminee", "video": f"/video/{travail}.mp4", "identifiant": travail,
+    }
+    assert app_web.lister_videos() == [{"id": travail, "nom": "Agnes : Deux photos"}]
     assert (tmp_path / travail / "video.mp4").read_bytes() == b"FAUSSE-VIDEO"

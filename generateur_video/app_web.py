@@ -7,7 +7,8 @@ puis ouvrir http://localhost:8000 dans un navigateur.
 Deux outils sont proposés :
 - « Agnes AI » : l'intelligence artificielle d'Agnes crée la vidéo à partir
   d'une description et d'une ou plusieurs photos de référence (clé API requise) ;
-- « Diaporama » : les photos sont assemblées localement en diaporama animé.
+- « Diaporama » : les photos sont assemblées localement en diaporama animé ;
+- « Montage » : plusieurs segments vidéo sont réunis en une seule vidéo.
 
 Le serveur n'utilise que la bibliothèque standard de Python (http.server),
 en plus de Pillow et ffmpeg utilisés par `studio.py`.
@@ -23,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import agnes
+import montage
 import studio
 
 DOSSIER_TRAVAIL = Path(tempfile.gettempdir()) / "generateur_video"
@@ -54,12 +56,30 @@ nav a.actif { background: #6c63ff; color: white; }
 .apercus { display: flex; flex-wrap: wrap; gap: 8px; }
 .apercus img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; }
 progress { width: 100%; height: 14px; }
+.segments { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.segments li { display: flex; align-items: center; gap: 10px; background: #2a2a3d;
+               padding: 8px; border-radius: 8px; }
+.segments video { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; }
+.segments span { flex: 1; overflow-wrap: anywhere; font-size: .9em; }
+.segments button { padding: 6px 10px; background: #3a3a55; }
+.vide { color: #aaa; font-style: italic; }
 #resultat { display: grid; gap: 12px; margin-top: 18px; }
 """
 
 NAVIGATION = """
 <nav><a href="/" class="{agnes}">✨ Agnes AI</a>
-<a href="/diaporama" class="{diaporama}">🎞️ Diaporama</a></nav>
+<a href="/diaporama" class="{diaporama}">🎞️ Diaporama</a>
+<a href="/montage" class="{montage}">🎬 Montage</a></nav>
+"""
+
+SCRIPT_AJOUT = """
+function ajouterAuMontage(identifiant) {
+  try {
+    const liste = JSON.parse(localStorage.getItem("montage") || "[]");
+    liste.push(identifiant);
+    localStorage.setItem("montage", JSON.stringify(liste));
+  } catch (e) {}
+}
 """
 
 OPTIONS_MODELES = "".join(f"<option value='{m}'>{n}</option>" for m, n in agnes.MODELES.items())
@@ -67,7 +87,7 @@ OPTIONS_MODES = "".join(f"<option value='{m}'>{n}</option>" for m, n in agnes.MO
 OPTIONS_FORMATS = "".join(f"<option>{f}</option>" for f in agnes.FORMATS)
 OPTIONS_TAILLES = "".join(f"<option>{t}</option>" for t in agnes.TAILLES)
 
-FORMULAIRE_AGNES = NAVIGATION.format(agnes="actif", diaporama="") + f"""
+FORMULAIRE_AGNES = NAVIGATION.format(agnes="actif", diaporama="", montage="") + f"""
 <h1>✨ Vidéo créée par Agnes AI</h1>
 <p>Ajoutez une ou plusieurs photos de référence et décrivez la vidéo voulue :
 Agnes génère la vidéo par intelligence artificielle.</p>
@@ -121,6 +141,7 @@ document.getElementById("photos").onchange = (evenement) => {{
   }}
 }};
 const resultat = document.getElementById("resultat");
+{SCRIPT_AJOUT}
 function afficher(contenu) {{ resultat.innerHTML = contenu; }}
 function erreur(message) {{
   const p = document.createElement("p");
@@ -137,7 +158,8 @@ async function suivre(travail) {{
     document.getElementById("lancer").disabled = false;
     return afficher(`<h2>✅ Votre vidéo est prête</h2>
       <video src="${{etat.video}}" controls autoplay loop></video>
-      <a href="${{etat.video}}" download="video_agnes.mp4">⬇️ Télécharger la vidéo</a>`);
+      <p><a href="${{etat.video}}" download="video_agnes.mp4">⬇️ Télécharger la vidéo</a> ·
+      <a href="/montage" onclick="ajouterAuMontage('${{etat.identifiant}}')">➕ Ajouter au montage</a></p>`);
   }}
   afficher(`<p>Agnes crée votre vidéo… ${{etat.progression}} %</p>
     <progress max="100" value="${{etat.progression}}"></progress>
@@ -164,7 +186,157 @@ document.getElementById("formulaire").onsubmit = async (evenement) => {{
 </script>
 """
 
-FORMULAIRE = NAVIGATION.format(agnes="", diaporama="actif") + """
+OPTIONS_FORMATS_MONTAGE = "".join(f"<option>{f}</option>" for f in montage.FORMATS)
+
+FORMULAIRE_MONTAGE = NAVIGATION.format(agnes="", diaporama="", montage="actif") + """
+<h1>🎬 Montage</h1>
+<p>Réunissez plusieurs segments (vidéos Agnes, diaporamas ou vos propres clips)
+en une seule et même vidéo.</p>
+<form id="formulaire">
+  <label>Vidéos déjà créées <small>(cliquez sur ➕ pour les ajouter au montage)</small></label>
+  <ul class="segments" id="disponibles"></ul>
+  <label>Ajouter vos propres clips vidéo
+    <input type="file" id="clips" accept="video/*" multiple>
+  </label>
+  <label>Votre montage <small>(dans l'ordre de lecture — ↑ ↓ pour réorganiser)</small></label>
+  <ul class="segments" id="montage"></ul>
+  <div class="ligne">
+    <label>Format final <select name="format">OPTIONS_FORMATS_MONTAGE</select></label>
+    <label>Fondu entre segments (s)
+      <input type="number" name="fondu" value="0.5" min="0" max="3" step="0.1"></label>
+  </div>
+  <button type="submit" id="lancer">Assembler en une seule vidéo</button>
+</form>
+<div id="resultat"></div>
+<script>
+SCRIPT_AJOUT
+let segments = [];  // { type: "serveur", id, nom } ou { type: "fichier", fichier, nom }
+let disponibles = [];
+
+function sauvegarder() {
+  try {
+    const ids = segments.filter((s) => s.type === "serveur").map((s) => s.id);
+    localStorage.setItem("montage", JSON.stringify(ids));
+  } catch (e) {}
+}
+
+function ligne(source, nom, boutons) {
+  const li = document.createElement("li");
+  const video = document.createElement("video");
+  video.src = source; video.muted = true; video.preload = "metadata";
+  const texte = document.createElement("span");
+  texte.textContent = nom;
+  li.append(video, texte);
+  for (const [etiquette, action] of boutons) {
+    const bouton = document.createElement("button");
+    bouton.type = "button"; bouton.textContent = etiquette; bouton.onclick = action;
+    li.appendChild(bouton);
+  }
+  return li;
+}
+
+function vide(liste, message) {
+  const li = document.createElement("li");
+  li.className = "vide"; li.textContent = message;
+  liste.replaceChildren(li);
+}
+
+function deplacer(position, sens) {
+  const cible = position + sens;
+  if (cible < 0 || cible >= segments.length) return;
+  [segments[position], segments[cible]] = [segments[cible], segments[position]];
+  afficher();
+}
+
+function afficher() {
+  const liste = document.getElementById("montage");
+  liste.replaceChildren();
+  segments.forEach((segment, position) => {
+    const source = segment.type === "serveur" ? `/video/${segment.id}.mp4` : segment.url;
+    liste.appendChild(ligne(source, `${position + 1}. ${segment.nom}`, [
+      ["↑", () => deplacer(position, -1)],
+      ["↓", () => deplacer(position, 1)],
+      ["✕", () => { segments.splice(position, 1); afficher(); }],
+    ]));
+  });
+  if (!segments.length) vide(liste, "Aucun segment pour l'instant.");
+  sauvegarder();
+}
+
+async function chargerDisponibles() {
+  const reponse = await fetch("/montage/videos");
+  disponibles = await reponse.json();
+  const liste = document.getElementById("disponibles");
+  liste.replaceChildren();
+  for (const video of disponibles) {
+    liste.appendChild(ligne(`/video/${video.id}.mp4`, video.nom, [
+      ["➕", () => { segments.push({ type: "serveur", ...video }); afficher(); }],
+    ]));
+  }
+  if (!disponibles.length) vide(liste, "Aucune vidéo créée pour l'instant.");
+}
+
+async function charger() {
+  await chargerDisponibles();
+  let enAttente = [];
+  try { enAttente = JSON.parse(localStorage.getItem("montage") || "[]"); } catch (e) {}
+  for (const id of enAttente) {
+    const video = disponibles.find((v) => v.id === id);
+    if (video) segments.push({ type: "serveur", ...video });
+  }
+  afficher();
+}
+
+document.getElementById("clips").onchange = (evenement) => {
+  for (const fichier of evenement.target.files) {
+    segments.push({ type: "fichier", fichier, nom: fichier.name, url: URL.createObjectURL(fichier) });
+  }
+  evenement.target.value = "";
+  afficher();
+};
+
+const resultat = document.getElementById("resultat");
+document.getElementById("formulaire").onsubmit = async (evenement) => {
+  evenement.preventDefault();
+  if (!segments.length) {
+    resultat.innerHTML = "<p class='erreur'>Ajoutez au moins un segment.</p>";
+    return;
+  }
+  const donnees = new FormData(evenement.target);
+  const ordre = [];
+  let numero = 0;
+  for (const segment of segments) {
+    if (segment.type === "serveur") ordre.push("serveur:" + segment.id);
+    else { ordre.push("fichier:" + numero++); donnees.append("clips", segment.fichier); }
+  }
+  donnees.append("ordre", ordre.join("\\n"));
+  const bouton = document.getElementById("lancer");
+  bouton.disabled = true;
+  resultat.innerHTML = "<p>Assemblage en cours…</p><progress></progress>";
+  try {
+    const reponse = await fetch("/montage/assembler", { method: "POST", body: donnees });
+    const etat = await reponse.json();
+    if (etat.erreur) {
+      const p = document.createElement("p");
+      p.className = "erreur"; p.textContent = "Erreur : " + etat.erreur;
+      resultat.replaceChildren(p);
+    } else {
+      resultat.innerHTML = `<h2>✅ Votre vidéo complète est prête</h2>
+        <video src="${etat.video}" controls autoplay></video>
+        <p><a href="${etat.video}" download="montage.mp4">⬇️ Télécharger la vidéo</a></p>`;
+      chargerDisponibles();
+    }
+  } catch (e) {
+    resultat.innerHTML = "<p class='erreur'>Le serveur local ne répond pas.</p>";
+  }
+  bouton.disabled = false;
+};
+
+charger();
+</script>
+""".replace("OPTIONS_FORMATS_MONTAGE", OPTIONS_FORMATS_MONTAGE).replace("SCRIPT_AJOUT", SCRIPT_AJOUT)
+
+FORMULAIRE = NAVIGATION.format(agnes="", diaporama="actif", montage="") + """
 <h1>🎞️ Diaporama animé</h1>
 <p>Choisissez vos photos : elles seront assemblées en diaporama animé
 (zoom lent, fondus enchaînés, titre et légendes).</p>
@@ -252,7 +424,9 @@ def lancer_agnes(champs, fichiers):
     )
     video_id = client.creer_video(corps)
     travail = uuid.uuid4().hex[:12]
-    TRAVAUX_AGNES[travail] = {"client": client, "video_id": video_id, "modele": modele}
+    TRAVAUX_AGNES[travail] = {
+        "client": client, "video_id": video_id, "modele": modele, "prompt": corps["prompt"],
+    }
     return travail
 
 
@@ -262,8 +436,9 @@ def etat_agnes(travail):
     if infos is None:
         raise ValueError("Génération inconnue (le serveur a peut-être redémarré).")
     fichier = DOSSIER_TRAVAIL / travail / "video.mp4"
+    termine = {"statut": "terminee", "video": f"/video/{travail}.mp4", "identifiant": travail}
     if fichier.is_file():
-        return {"statut": "terminee", "video": f"/video/{travail}.mp4"}
+        return termine
 
     etat = infos["client"].etat(infos["video_id"], infos["modele"])
     if etat["statut"] == "echec":
@@ -273,7 +448,8 @@ def etat_agnes(travail):
             raise agnes.ErreurAgnes("Vidéo terminée, mais Agnes n'a pas fourni son adresse.")
         fichier.parent.mkdir(parents=True, exist_ok=True)
         agnes.telecharger(etat["url"], fichier)
-        return {"statut": "terminee", "video": f"/video/{travail}.mp4"}
+        nommer(fichier.parent, f"Agnes : {infos['prompt'][:60]}")
+        return termine
     return {"statut": "en_cours", "progression": etat["progression"]}
 
 
@@ -313,6 +489,58 @@ def generer_depuis_formulaire(champs, fichiers):
         audio=str(audio),
     )
     studio.creer_video(photos, dossier / "video.mp4", reglages)
+    nommer(dossier, f"Diaporama : {reglages.titre or f'{len(photos)} photo(s)'}")
+    return identifiant
+
+
+def nommer(dossier, nom):
+    """Enregistre le nom affiché d'une vidéo (utilisé par la page Montage)."""
+    (dossier / "nom.txt").write_text(nom, encoding="utf-8")
+
+
+def lister_videos():
+    """Renvoie les vidéos déjà créées, de la plus récente à la plus ancienne."""
+    if not DOSSIER_TRAVAIL.is_dir():
+        return []
+    fichiers = sorted(
+        DOSSIER_TRAVAIL.glob("*/video.mp4"), key=lambda f: f.stat().st_mtime, reverse=True
+    )
+    videos = []
+    for fichier in fichiers:
+        nom = fichier.parent / "nom.txt"
+        videos.append({
+            "id": fichier.parent.name,
+            "nom": nom.read_text(encoding="utf-8") if nom.is_file() else "Vidéo",
+        })
+    return videos
+
+
+def assembler_montage(champs, fichiers):
+    """Assemble les segments demandés (vidéos déjà créées et clips envoyés)."""
+    identifiant = uuid.uuid4().hex[:12]
+    dossier = DOSSIER_TRAVAIL / identifiant
+    dossier.mkdir(parents=True)
+    clips = fichiers.get("clips", [])
+    segments = []
+    for element in champs.get("ordre", "").split():
+        genre, _, valeur = element.partition(":")
+        if genre == "serveur" and valeur.isalnum():
+            chemin = DOSSIER_TRAVAIL / valeur / "video.mp4"
+            if not chemin.is_file():
+                raise ValueError("Une des vidéos du montage n'existe plus.")
+        elif genre == "fichier" and valeur.isdigit() and int(valeur) < len(clips):
+            nom, contenu = clips[int(valeur)]
+            chemin = dossier / f"clip_{valeur}{Path(nom).suffix}"
+            chemin.write_bytes(contenu)
+        else:
+            raise ValueError(f"Segment invalide : {element}")
+        segments.append(chemin)
+    if not segments:
+        raise ValueError("Ajoutez au moins un segment au montage.")
+
+    format_video = champs.get("format", "16:9")
+    montage.assembler(segments, dossier / "video.mp4", format_video, fondu=nombre(champs, "fondu", 0))
+    nommer(dossier, f"Montage : {len(segments)} segment(s)")
     return identifiant
 
 
@@ -334,6 +562,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
             self.envoyer(200, page(FORMULAIRE_AGNES))
         elif self.path == "/diaporama":
             self.envoyer(200, page(FORMULAIRE))
+        elif self.path == "/montage":
+            self.envoyer(200, page(FORMULAIRE_MONTAGE))
+        elif self.path == "/montage/videos":
+            self.envoyer_json(lister_videos())
         elif self.path.startswith("/agnes/etat/"):
             try:
                 self.envoyer_json(etat_agnes(self.path.split("/")[3]))
@@ -345,7 +577,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 "<h1>✅ Votre vidéo est prête</h1>"
                 f"<video src='/video/{html.escape(identifiant)}.mp4' controls autoplay></video>"
                 f"<p><a href='/video/{html.escape(identifiant)}.mp4' download='video.mp4'>"
-                "⬇️ Télécharger la vidéo</a> · <a href='/diaporama'>Créer une autre vidéo</a></p>"
+                "⬇️ Télécharger la vidéo</a> · <a href='/diaporama'>Créer une autre vidéo</a> · "
+                f"<a href='/montage' onclick=\"ajouterAuMontage('{html.escape(identifiant)}')\">"
+                f"➕ Ajouter au montage</a></p><script>{SCRIPT_AJOUT}</script>"
             ))
         elif self.path.startswith("/video/") and self.path.endswith(".mp4"):
             identifiant = self.path[len("/video/"):-len(".mp4")]
@@ -358,12 +592,22 @@ class Gestionnaire(BaseHTTPRequestHandler):
             self.envoyer(404, page("<p>Page introuvable. <a href='/'>Accueil</a></p>"))
 
     def do_POST(self):
-        if self.path not in ("/generer", "/agnes/lancer"):
+        if self.path not in ("/generer", "/agnes/lancer", "/montage/assembler"):
             self.envoyer(404, page("<p>Page introuvable.</p>"))
             return
         longueur = int(self.headers.get("Content-Length", 0))
         if longueur > TAILLE_MAX:
             self.envoyer(413, page("<p class='erreur'>Fichiers trop volumineux.</p>"))
+            return
+        if self.path == "/montage/assembler":
+            try:
+                champs, fichiers = lire_formulaire(
+                    self.headers.get("Content-Type", ""), self.rfile.read(longueur)
+                )
+                identifiant = assembler_montage(champs, fichiers)
+                self.envoyer_json({"video": f"/video/{identifiant}.mp4"})
+            except (ValueError, OSError, RuntimeError) as erreur:
+                self.envoyer_json({"erreur": str(erreur)})
             return
         if self.path == "/agnes/lancer":
             try:
