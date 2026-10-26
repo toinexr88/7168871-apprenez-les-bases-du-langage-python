@@ -2,7 +2,9 @@
 
 Lancement :
     python app_web.py
-puis ouvrir http://localhost:8000 dans un navigateur.
+puis ouvrir http://localhost:8000 sur l'ordinateur, ou l'adresse
+« Sur le téléphone » affichée (même Wi-Fi) depuis un smartphone.
+Option --local : accès réservé à l'ordinateur.
 
 Deux outils sont proposés :
 - « Agnes AI » : l'intelligence artificielle d'Agnes crée la vidéo à partir
@@ -14,8 +16,11 @@ Le serveur n'utilise que la bibliothèque standard de Python (http.server),
 en plus de Pillow et ffmpeg utilisés par `studio.py`.
 """
 
+import argparse
 import html
+import io
 import json
+import socket
 import tempfile
 import uuid
 from email.parser import BytesParser
@@ -34,36 +39,58 @@ RESOLUTIONS = {"720p": (1280, 720), "1080p": (1920, 1080), "carre": (1080, 1080)
 
 STYLE = """
 * { box-sizing: border-box; min-width: 0; }
-body { font-family: system-ui, sans-serif; background: #14141f; color: #eee;
-       max-width: 760px; margin: 0 auto; padding: 24px 16px; }
-h1 { margin-top: 0; } a { color: #9ab8ff; }
-form { display: grid; gap: 14px; background: #1f1f2e; padding: 20px; border-radius: 12px; }
+html { -webkit-text-size-adjust: 100%; }
+body { font-family: system-ui, sans-serif; background: #14141f; color: #eee; margin: 0 auto;
+       max-width: 760px; line-height: 1.45;
+       padding: 0 max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+                max(16px, env(safe-area-inset-left)); }
+h1 { margin: 18px 0 8px; font-size: clamp(1.35rem, 5vw, 1.9rem); text-wrap: balance; }
+h2 { font-size: 1.2rem; } a { color: #9ab8ff; }
+form { display: grid; gap: 16px; background: #1f1f2e; padding: 18px; border-radius: 14px; }
 label { display: grid; gap: 6px; font-weight: 600; }
-.ligne { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-input, select, textarea { font: inherit; padding: 8px; border-radius: 8px;
-       border: 1px solid #444; background: #2a2a3d; color: #eee; }
+.ligne { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+input, select, textarea { font: inherit; font-size: 16px; padding: 12px; border-radius: 10px;
+       border: 1px solid #444; background: #2a2a3d; color: #eee; width: 100%; min-height: 46px; }
+input[type=checkbox] { width: 22px; height: 22px; min-height: 0; vertical-align: middle;
+       margin: 0 8px 0 0; accent-color: #6c63ff; }
+input[type=file] { padding: 10px; }
+input[type=file]::file-selector-button { font: inherit; font-weight: 700; border: 0;
+       border-radius: 8px; padding: 8px 12px; margin-right: 10px; background: #3a3a55; color: #fff; }
 small { font-weight: normal; color: #aaa; }
-button { font: inherit; font-weight: 700; padding: 12px; border: 0; border-radius: 8px;
-         background: #6c63ff; color: white; cursor: pointer; }
+button { font: inherit; font-weight: 700; padding: 14px; min-height: 48px; border: 0;
+         border-radius: 10px; background: #6c63ff; color: white; cursor: pointer;
+         touch-action: manipulation; }
 button:disabled { opacity: .6; cursor: wait; }
-video { width: 100%; border-radius: 12px; background: black; }
-.erreur { background: #5a1f2a; padding: 12px; border-radius: 8px; }
-nav { display: flex; gap: 8px; margin-bottom: 18px; }
-nav a { padding: 8px 14px; border-radius: 8px; background: #1f1f2e; text-decoration: none; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible { outline: 3px solid #9ab8ff; outline-offset: 2px; }
+video { width: 100%; max-height: 70vh; border-radius: 12px; background: black; }
+.erreur { background: #5a1f2a; padding: 12px; border-radius: 8px; overflow-wrap: anywhere; }
+nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto;
+      margin: 0 calc(-1 * max(16px, env(safe-area-inset-left))); scrollbar-width: none;
+      padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) 10px;
+      background: #14141f; border-bottom: 1px solid #2a2a3d; }
+nav::-webkit-scrollbar { display: none; }
+nav a { flex: 1 0 auto; text-align: center; padding: 10px 14px; border-radius: 10px;
+        background: #1f1f2e; text-decoration: none; white-space: nowrap; }
 nav a.actif { background: #6c63ff; color: white; }
 .cle { display: flex; gap: 8px; } .cle input { flex: 1; }
-.cle button { padding: 8px 12px; background: #3a3a55; }
-.apercus { display: flex; flex-wrap: wrap; gap: 8px; }
-.apercus img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; }
+.cle button { padding: 8px 14px; background: #3a3a55; }
+.apercus { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.apercus img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
 progress { width: 100%; height: 14px; }
 .segments { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
-.segments li { display: flex; align-items: center; gap: 10px; background: #2a2a3d;
-               padding: 8px; border-radius: 8px; }
+.segments li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #2a2a3d;
+               padding: 8px; border-radius: 10px; }
 .segments video { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; }
-.segments span { flex: 1; overflow-wrap: anywhere; font-size: .9em; }
-.segments button { padding: 6px 10px; background: #3a3a55; }
+.segments span { flex: 1 1 120px; overflow-wrap: anywhere; font-size: .9em; }
+.segments button { padding: 8px 12px; min-height: 40px; min-width: 40px; background: #3a3a55; }
 .vide { color: #aaa; font-style: italic; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions a { flex: 1 1 160px; text-align: center; padding: 12px; border-radius: 10px;
+             background: #2a2a3d; text-decoration: none; font-weight: 700; }
 #resultat { display: grid; gap: 12px; margin-top: 18px; }
+@media (max-width: 480px) { form { padding: 14px; } .ligne { grid-template-columns: 1fr 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 """
 
 NAVIGATION = """
@@ -157,8 +184,8 @@ async function suivre(travail) {{
   if (etat.statut === "terminee") {{
     document.getElementById("lancer").disabled = false;
     return afficher(`<h2>✅ Votre vidéo est prête</h2>
-      <video src="${{etat.video}}" controls autoplay loop></video>
-      <p><a href="${{etat.video}}" download="video_agnes.mp4">⬇️ Télécharger la vidéo</a> ·
+      <video src="${{etat.video}}" controls autoplay muted loop playsinline></video>
+      <p class="actions"><a href="${{etat.video}}" download="video_agnes.mp4">⬇️ Télécharger</a>
       <a href="/montage" onclick="ajouterAuMontage('${{etat.identifiant}}')">➕ Ajouter au montage</a></p>`);
   }}
   afficher(`<p>Agnes crée votre vidéo… ${{etat.progression}} %</p>
@@ -223,7 +250,7 @@ function sauvegarder() {
 function ligne(source, nom, boutons) {
   const li = document.createElement("li");
   const video = document.createElement("video");
-  video.src = source; video.muted = true; video.preload = "metadata";
+  video.src = source; video.muted = true; video.playsInline = true; video.preload = "metadata";
   const texte = document.createElement("span");
   texte.textContent = nom;
   li.append(video, texte);
@@ -322,8 +349,8 @@ document.getElementById("formulaire").onsubmit = async (evenement) => {
       resultat.replaceChildren(p);
     } else {
       resultat.innerHTML = `<h2>✅ Votre vidéo complète est prête</h2>
-        <video src="${etat.video}" controls autoplay></video>
-        <p><a href="${etat.video}" download="montage.mp4">⬇️ Télécharger la vidéo</a></p>`;
+        <video src="${etat.video}" controls autoplay muted playsinline></video>
+        <p class="actions"><a href="${etat.video}" download="montage.mp4">⬇️ Télécharger la vidéo</a></p>`;
       chargerDisponibles();
     }
   } catch (e) {
@@ -375,13 +402,58 @@ FORMULAIRE = NAVIGATION.format(agnes="", diaporama="actif", montage="") + """
 """
 
 
+ICONE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" rx="112" fill="#6c63ff"/>
+<rect x="96" y="150" width="240" height="212" rx="36" fill="#fff"/>
+<path d="M352 226l80-48v156l-80-48z" fill="#fff"/>
+<circle cx="170" cy="222" r="26" fill="#6c63ff"/></svg>"""
+
+MANIFESTE = json.dumps({
+    "name": "Générateur de vidéo",
+    "short_name": "Vidéo",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#14141f",
+    "theme_color": "#14141f",
+    "lang": "fr",
+    "icons": [{"src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}],
+}, ensure_ascii=False)
+
+ENTETE_MOBILE = (
+    "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
+    "<meta name='theme-color' content='#14141f'>"
+    "<meta name='mobile-web-app-capable' content='yes'>"
+    "<meta name='apple-mobile-web-app-capable' content='yes'>"
+    "<meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>"
+    "<meta name='apple-mobile-web-app-title' content='Vidéo'>"
+    "<link rel='manifest' href='/manifest.json'>"
+    "<link rel='icon' href='/icone.svg' type='image/svg+xml'>"
+    "<link rel='apple-touch-icon' href='/icone.png'>"
+)
+
+
 def page(contenu):
     return (
         "<!doctype html><html lang='fr'><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        f"<title>Générateur de vidéo</title><style>{STYLE}</style></head>"
+        f"{ENTETE_MOBILE}<title>Générateur de vidéo</title><style>{STYLE}</style></head>"
         f"<body>{contenu}</body></html>"
     ).encode("utf-8")
+
+
+def icone_png():
+    """Icône PNG pour l'écran d'accueil iPhone (Safari n'accepte pas le SVG)."""
+    from PIL import Image, ImageDraw
+    taille = 180
+    image = Image.new("RGB", (taille, taille), "#6c63ff")
+    dessin = ImageDraw.Draw(image)
+    k = taille / 512
+    dessin.rounded_rectangle([96 * k, 150 * k, 336 * k, 362 * k], radius=36 * k, fill="white")
+    dessin.polygon([(352 * k, 226 * k), (432 * k, 178 * k), (432 * k, 334 * k), (352 * k, 286 * k)],
+                   fill="white")
+    dessin.ellipse([144 * k, 196 * k, 196 * k, 248 * k], fill="#6c63ff")
+    tampon = io.BytesIO()
+    image.save(tampon, "PNG")
+    return tampon.getvalue()
 
 
 def lire_formulaire(entete_type, corps):
@@ -554,6 +626,31 @@ class Gestionnaire(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(contenu)
 
+    def envoyer_video(self, fichier):
+        """Sert la vidéo en gérant les plages (Range) : indispensable sur iPhone/iPad."""
+        donnees = fichier.read_bytes()
+        total = len(donnees)
+        plage = self.headers.get("Range", "")
+        entetes = {"Accept-Ranges": "bytes"}
+        if plage.startswith("bytes="):
+            debut_txt, _, fin_txt = plage[6:].split(",")[0].strip().partition("-")
+            try:
+                if debut_txt:
+                    debut = int(debut_txt)
+                    fin = int(fin_txt) if fin_txt else total - 1
+                else:
+                    debut, fin = max(0, total - int(fin_txt)), total - 1
+            except ValueError:
+                debut, fin = 0, total - 1
+            fin = min(fin, total - 1)
+            if debut > fin or debut >= total:
+                self.envoyer(416, b"", "video/mp4", {"Content-Range": f"bytes */{total}"})
+                return
+            entetes["Content-Range"] = f"bytes {debut}-{fin}/{total}"
+            self.envoyer(206, donnees[debut:fin + 1], "video/mp4", entetes)
+        else:
+            self.envoyer(200, donnees, "video/mp4", entetes)
+
     def envoyer_json(self, donnees, code=200):
         self.envoyer(code, json.dumps(donnees).encode(), "application/json")
 
@@ -574,18 +671,25 @@ class Gestionnaire(BaseHTTPRequestHandler):
         elif self.path.startswith("/resultat/"):
             identifiant = self.path.split("/")[2]
             self.envoyer(200, page(
-                "<h1>✅ Votre vidéo est prête</h1>"
-                f"<video src='/video/{html.escape(identifiant)}.mp4' controls autoplay></video>"
-                f"<p><a href='/video/{html.escape(identifiant)}.mp4' download='video.mp4'>"
-                "⬇️ Télécharger la vidéo</a> · <a href='/diaporama'>Créer une autre vidéo</a> · "
+                NAVIGATION.format(agnes="", diaporama="actif", montage="")
+                + "<h1>✅ Votre vidéo est prête</h1>"
+                f"<video src='/video/{html.escape(identifiant)}.mp4' controls autoplay muted playsinline></video>"
+                f"<p class='actions'><a href='/video/{html.escape(identifiant)}.mp4' download='video.mp4'>"
+                "⬇️ Télécharger</a><a href='/diaporama'>Nouvelle vidéo</a>"
                 f"<a href='/montage' onclick=\"ajouterAuMontage('{html.escape(identifiant)}')\">"
                 f"➕ Ajouter au montage</a></p><script>{SCRIPT_AJOUT}</script>"
             ))
+        elif self.path == "/manifest.json":
+            self.envoyer(200, MANIFESTE.encode(), "application/manifest+json")
+        elif self.path == "/icone.svg":
+            self.envoyer(200, ICONE.encode(), "image/svg+xml")
+        elif self.path == "/icone.png":
+            self.envoyer(200, icone_png(), "image/png")
         elif self.path.startswith("/video/") and self.path.endswith(".mp4"):
             identifiant = self.path[len("/video/"):-len(".mp4")]
             fichier = DOSSIER_TRAVAIL / identifiant / "video.mp4"
             if identifiant.isalnum() and fichier.is_file():
-                self.envoyer(200, fichier.read_bytes(), "video/mp4")
+                self.envoyer_video(fichier)
             else:
                 self.envoyer(404, page("<p>Vidéo introuvable.</p>"))
         else:
@@ -632,9 +736,39 @@ class Gestionnaire(BaseHTTPRequestHandler):
         self.envoyer(303, b"", entetes={"Location": f"/resultat/{identifiant}"})
 
 
-def lancer(port=8000):
-    serveur = ThreadingHTTPServer(("127.0.0.1", port), Gestionnaire)
-    print(f"Générateur de vidéo disponible sur http://localhost:{port} (Ctrl+C pour arrêter)")
+def adresse_reseau():
+    """Adresse IP de l'ordinateur sur le Wi-Fi (pour l'ouvrir depuis le téléphone)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))  # aucun paquet n'est réellement envoyé
+            return s.getsockname()[0]
+    except OSError:
+        return None
+
+
+def afficher_qr(url):
+    """Affiche un QR code dans le terminal si le module « qrcode » est installé."""
+    try:
+        import qrcode
+    except ImportError:
+        print("  (astuce : pip install qrcode → QR code à scanner avec le téléphone)")
+        return
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(url)
+    qr.print_ascii(invert=True)
+
+
+def lancer(port=8000, mobile=True):
+    hote = "0.0.0.0" if mobile else "127.0.0.1"
+    serveur = ThreadingHTTPServer((hote, port), Gestionnaire)
+    print(f"Générateur de vidéo prêt (Ctrl+C pour arrêter)")
+    print(f"  Sur cet ordinateur : http://localhost:{port}")
+    ip = adresse_reseau() if mobile else None
+    if ip:
+        url = f"http://{ip}:{port}"
+        print(f"  Sur le téléphone (même Wi-Fi) : {url}")
+        afficher_qr(url)
+        print("  Ajoutez-la à l'écran d'accueil : Partager → « Sur l'écran d'accueil ».")
     try:
         serveur.serve_forever()
     except KeyboardInterrupt:
@@ -642,4 +776,9 @@ def lancer(port=8000):
 
 
 if __name__ == "__main__":
-    lancer()
+    parseur = argparse.ArgumentParser(description="Interface web du générateur de vidéo.")
+    parseur.add_argument("--port", type=int, default=8000)
+    parseur.add_argument("--local", action="store_true",
+                         help="Accès depuis cet ordinateur uniquement (pas depuis le téléphone)")
+    args = parseur.parse_args()
+    lancer(args.port, mobile=not args.local)

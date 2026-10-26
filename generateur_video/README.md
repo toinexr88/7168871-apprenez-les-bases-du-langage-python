@@ -8,6 +8,20 @@ Deux façons de créer une vidéo à partir de vos photos :
 3. **🎬 Montage** : plusieurs segments (vidéos Agnes, diaporamas, vos propres clips)
    sont réunis en **une seule et même vidéo**.
 
+## 📱 Utilisation sur téléphone
+
+1. Sur l'ordinateur : `python app_web.py`.
+2. Le terminal affiche l'adresse **« Sur le téléphone »** (ex. `http://192.168.1.20:8000`).
+   Avec `pip install qrcode`, un QR code s'affiche : scannez-le.
+3. Ouvrez cette adresse sur le téléphone, **connecté au même Wi-Fi**.
+4. Ajoutez-la à l'écran d'accueil (iPhone : Partager → « Sur l'écran d'accueil » ;
+   Android : menu ⋮ → « Ajouter à l'écran d'accueil ») : elle s'ouvre alors comme une appli.
+
+Les photos peuvent être prises directement avec l'appareil photo du téléphone.
+L'ordinateur doit rester allumé : c'est lui qui crée les vidéos.
+Option `--local` : accès réservé à l'ordinateur ; `--port 8080` pour changer de port.
+Si le téléphone n'accède pas à la page, autorisez Python dans le pare-feu de l'ordinateur.
+
 ## ✨ Création par Agnes AI
 
 1. Créez une clé API sur <https://platform.agnes-ai.com/settings/apiKeys>.
