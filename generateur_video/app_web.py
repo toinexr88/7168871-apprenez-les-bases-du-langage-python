@@ -17,11 +17,15 @@ en plus de Pillow et ffmpeg utilisés par `studio.py`.
 """
 
 import argparse
+import hashlib
+import hmac
 import html
+import os
 import io
 import json
 import socket
 import tempfile
+import urllib.parse
 import uuid
 from email.parser import BytesParser
 from email.policy import HTTP
@@ -34,6 +38,9 @@ import studio
 
 DOSSIER_TRAVAIL = Path(tempfile.gettempdir()) / "generateur_video"
 TAILLE_MAX = 300 * 1024 * 1024  # 300 Mo d'envoi au maximum
+CLE_SERVEUR = os.environ.get("AGNES_API_KEY", "").strip()  # clé enregistrée sur l'hébergeur
+MOT_DE_PASSE = os.environ.get("APP_MOT_DE_PASSE", "")  # protège l'appli hébergée en ligne
+JETON = hmac.new(MOT_DE_PASSE.encode(), b"acces-generateur-video", hashlib.sha256).hexdigest()
 TRAVAUX_AGNES = {}  # générations Agnes en cours : identifiant → informations
 RESOLUTIONS = {"720p": (1280, 720), "1080p": (1920, 1080), "carre": (1080, 1080), "vertical": (1080, 1920)}
 
@@ -123,8 +130,8 @@ Agnes génère la vidéo par intelligence artificielle.</p>
     <small>À créer sur <a href="https://platform.agnes-ai.com/settings/apiKeys" target="_blank">
     platform.agnes-ai.com</a>. Elle n'est envoyée qu'à Agnes.</small>
     <span class="cle">
-      <input type="password" name="cle" id="cle" placeholder="Collez votre clé API ici"
-             autocomplete="off" required>
+      <input type="password" name="cle" id="cle" placeholder="PLACEHOLDER_CLE"
+             autocomplete="off" REQUIS_CLE>
       <button type="button" id="afficher">👁️</button>
     </span>
   </label>
@@ -456,6 +463,26 @@ def icone_png():
     return tampon.getvalue()
 
 
+def formulaire_agnes():
+    """Formulaire Agnes : la clé devient facultative si elle est enregistrée sur le serveur."""
+    if CLE_SERVEUR:
+        return (FORMULAIRE_AGNES.replace("PLACEHOLDER_CLE", "Clé déjà enregistrée sur le serveur ✓")
+                .replace("REQUIS_CLE", ""))
+    return FORMULAIRE_AGNES.replace("PLACEHOLDER_CLE", "Collez votre clé API ici").replace(
+        "REQUIS_CLE", "required")
+
+
+def page_connexion(erreur=""):
+    message = f"<p class='erreur'>{html.escape(erreur)}</p>" if erreur else ""
+    return page(f"""<h1>🎬 Générateur de vidéo</h1>{message}
+<form method="post" action="/connexion">
+  <label>Mot de passe
+    <input type="password" name="mot_de_passe" id="mot_de_passe" autocomplete="current-password"
+           required autofocus></label>
+  <button type="submit">Entrer</button>
+</form>""")
+
+
 def lire_formulaire(entete_type, corps):
     """Découpe un envoi multipart/form-data en champs texte et fichiers."""
     message = BytesParser(policy=HTTP).parsebytes(
@@ -483,7 +510,7 @@ def nombre(champs, nom, defaut):
 
 def lancer_agnes(champs, fichiers):
     """Envoie la demande à Agnes et renvoie l'identifiant local du travail."""
-    client = agnes.ClientAgnes(champs.get("cle", ""))
+    client = agnes.ClientAgnes(champs.get("cle", "").strip() or CLE_SERVEUR)
     photos = [contenu for _, contenu in sorted(fichiers.get("photos", []))]
     modele = champs.get("modele", "agnes-video-2.5-flash")
     try:
@@ -616,7 +643,24 @@ def assembler_montage(champs, fichiers):
     return identifiant
 
 
+PUBLIC = ("/manifest.json", "/icone.svg", "/icone.png", "/connexion", "/sante")
+
+
 class Gestionnaire(BaseHTTPRequestHandler):
+    def autorise(self):
+        """Vrai si aucun mot de passe n'est défini ou si le cookie d'accès est valide."""
+        if not MOT_DE_PASSE or self.path in PUBLIC:
+            return True
+        for morceau in self.headers.get("Cookie", "").split(";"):
+            nom, _, valeur = morceau.strip().partition("=")
+            if nom == "acces" and hmac.compare_digest(valeur, JETON):
+                return True
+        if self.path.startswith(("/agnes/", "/montage/videos", "/montage/assembler")):
+            self.envoyer_json({"erreur": "Session expirée : rechargez la page et reconnectez-vous."})
+        else:
+            self.envoyer(200, page_connexion())
+        return False
+
     def envoyer(self, code, contenu, type_contenu="text/html; charset=utf-8", entetes=None):
         self.send_response(code)
         self.send_header("Content-Type", type_contenu)
@@ -655,8 +699,12 @@ class Gestionnaire(BaseHTTPRequestHandler):
         self.envoyer(code, json.dumps(donnees).encode(), "application/json")
 
     def do_GET(self):
-        if self.path == "/":
-            self.envoyer(200, page(FORMULAIRE_AGNES))
+        if not self.autorise():
+            return
+        if self.path == "/sante":
+            self.envoyer(200, b"ok", "text/plain")
+        elif self.path == "/":
+            self.envoyer(200, page(formulaire_agnes()))
         elif self.path == "/diaporama":
             self.envoyer(200, page(FORMULAIRE))
         elif self.path == "/montage":
@@ -696,6 +744,20 @@ class Gestionnaire(BaseHTTPRequestHandler):
             self.envoyer(404, page("<p>Page introuvable. <a href='/'>Accueil</a></p>"))
 
     def do_POST(self):
+        if self.path == "/connexion":
+            longueur = min(int(self.headers.get("Content-Length", 0)), 10000)
+            champs = urllib.parse.parse_qs(self.rfile.read(longueur).decode(errors="replace"))
+            essai = champs.get("mot_de_passe", [""])[0]
+            if MOT_DE_PASSE and hmac.compare_digest(essai.encode(), MOT_DE_PASSE.encode()):
+                self.envoyer(303, b"", entetes={
+                    "Location": "/",
+                    "Set-Cookie": f"acces={JETON}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax",
+                })
+            else:
+                self.envoyer(200, page_connexion("Mot de passe incorrect."))
+            return
+        if not self.autorise():
+            return
         if self.path not in ("/generer", "/agnes/lancer", "/montage/assembler"):
             self.envoyer(404, page("<p>Page introuvable.</p>"))
             return
@@ -777,7 +839,7 @@ def lancer(port=8000, mobile=True):
 
 if __name__ == "__main__":
     parseur = argparse.ArgumentParser(description="Interface web du générateur de vidéo.")
-    parseur.add_argument("--port", type=int, default=8000)
+    parseur.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
     parseur.add_argument("--local", action="store_true",
                          help="Accès depuis cet ordinateur uniquement (pas depuis le téléphone)")
     args = parseur.parse_args()

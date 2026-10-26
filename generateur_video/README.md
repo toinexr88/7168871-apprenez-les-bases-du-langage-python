@@ -8,7 +8,23 @@ Deux façons de créer une vidéo à partir de vos photos :
 3. **🎬 Montage** : plusieurs segments (vidéos Agnes, diaporamas, vos propres clips)
    sont réunis en **une seule et même vidéo**.
 
-## 📱 Utilisation sur téléphone
+## ☁️ En ligne, sans ordinateur (Render, gratuit)
+
+Tout se fait depuis le téléphone :
+
+1. Créez un compte sur <https://render.com> (« Sign in with GitHub »).
+2. Ouvrez ce lien de déploiement :
+   <https://render.com/deploy?repo=https://github.com/toinexr88/7168871-apprenez-les-bases-du-langage-python/tree/claude/photo-studio-video-gen-idtkk2>
+3. Remplissez les deux champs demandés :
+   - `APP_MOT_DE_PASSE` : mot de passe pour entrer dans l'appli (obligatoire, sinon elle est ouverte à tous) ;
+   - `AGNES_API_KEY` : votre clé Agnes (facultatif : elle peut aussi être collée dans l'appli).
+4. Cliquez sur **Deploy Blueprint** et patientez 3 à 5 minutes.
+5. Ouvrez l'adresse `https://generateur-video-xxxx.onrender.com`, puis ajoutez-la à l'écran d'accueil.
+
+Formule gratuite : le service s'endort après 15 min sans visite (réveil en ~1 min) et les vidéos
+sont effacées au redémarrage : téléchargez-les dès qu'elles sont prêtes.
+
+## 📱 Utilisation sur téléphone avec un ordinateur
 
 1. Sur l'ordinateur : `python app_web.py`.
 2. Le terminal affiche l'adresse **« Sur le téléphone »** (ex. `http://192.168.1.20:8000`).
