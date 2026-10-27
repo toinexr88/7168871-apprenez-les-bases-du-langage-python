@@ -65,3 +65,7 @@ Dans ce dépôt GitHub, vous trouverez l'ensemble des exercices du cours [Appren
 
 - [Énoncé](https://github.com/OpenClassrooms-Student-Center/7168871-apprenez-les-bases-du-langage-python/tree/main/P1/P3C3/énoncé)
 - [Correction](https://github.com/OpenClassrooms-Student-Center/7168871-apprenez-les-bases-du-langage-python/tree/main/P1/P3C3/correction)
+
+## Projet bonus : générateur de vidéo
+
+Le dossier [`generateur_video`](generateur_video) contient une application qui crée des vidéos à partir de photos : génération par l'IA Agnes AI (clé API à coller dans l'interface, une ou plusieurs photos de référence) diaporama animé local, et montage de plusieurs segments en une seule vidéo, en ligne de commande ou via une interface web. Voir son [README](generateur_video/README.md).

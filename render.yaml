@@ -1,0 +1,16 @@
+# Déploiement en un clic sur Render (gratuit) : voir generateur_video/README.md
+services:
+  - type: web
+    name: generateur-video
+    runtime: docker
+    plan: free
+    rootDir: generateur_video
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /sante
+    autoDeploy: true
+    envVars:
+      - key: APP_MOT_DE_PASSE
+        sync: false
+      - key: AGNES_API_KEY
+        sync: false
